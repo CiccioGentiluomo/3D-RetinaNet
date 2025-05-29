@@ -721,13 +721,13 @@ class VideoDataset(tutils.data.Dataset):
         all_boxes = []
         labels = []
         ego_labels = []
-        mask = np.zeros(self.SEQ_LEN, dtype=np.int)
+        mask = np.zeros(self.SEQ_LEN, dtype=int)
         indexs = []
         for i in range(self.SEQ_LEN):
             indexs.append(frame_num)
             if self.DATASET != 'ava':
-                img_name = self._imgpath + '/{:s}/{:05d}.jpg'.format(videoname, frame_num)
-                img_name = self._imgpath + '/{:s}/img_{:05d}.jpg'.format(videoname, frame_num)
+                img_name = self._imgpath + '/{:s}/{:05d}.jpg'.format(videoname, frame_num+1)
+                #img_name = self._imgpath + '/{:s}/img_{:05d}.jpg'.format(videoname, frame_num)
             elif self.DATASET == 'ava':
                 img_name = self._imgpath + '/{:s}/{:s}_{:06d}.jpg'.format(videoname, videoname, frame_num)
 
@@ -762,6 +762,39 @@ class VideoDataset(tutils.data.Dataset):
                     boxes[:, 3] *= height # height y2
 
         return clip, all_boxes, labels, ego_labels, index, wh, self.num_classes
+    
+
+
+    # Qui aggiungi il metodo di controllo:
+    def check_sample(self, index):
+        id_info = self.ids[index]
+        video_id, start_frame, step_size = id_info[:3]
+        videoname = self.video_list[video_id]
+        
+        print(f"Campione {index}: video {videoname}, start_frame {start_frame}, step_size {step_size}")
+        
+        for i in range(self.SEQ_LEN):
+            frame_num = start_frame + i * step_size
+            img_path = f"{self._imgpath}/{videoname}/{frame_num:05d}.jpg"
+            try:
+                img = Image.open(img_path)
+            except Exception as e:
+                print(f"Errore apertura immagine {img_path}: {e}")
+                continue
+            width, height = img.size
+            
+            frame_data = self.frame_level_list[video_id][frame_num]
+            boxes = frame_data['boxes']
+            labels = frame_data['labels']
+            
+            for box in boxes:
+                x1, y1, x2, y2 = box
+                if x2 < x1 or y2 < y1:
+                    print(f"Errore coordinate box invertite: {box} nel frame {frame_num}")
+                if x1 < 0 or y1 < 0 or x2 > width or y2 > height:
+                    print(f"Errore box fuori immagine: {box} nel frame {frame_num}")
+            
+            print(f"Frame {frame_num}: {len(boxes)} box, labels shape: {labels.shape}")
 
 
 def custum_collate(batch):
@@ -792,7 +825,7 @@ def custum_collate(batch):
             temp_counts.append(bs.shape[0])
         assert seq_len == len(temp_counts)
         counts.append(temp_counts)
-    counts = np.asarray(counts, dtype=np.int)
+    counts = np.asarray(counts, dtype=int)
     new_boxes = torch.zeros(len(boxes), seq_len, max_len, 4)
     new_targets = torch.zeros([len(boxes), seq_len, max_len, num_classes])
     for c1, bs_ in enumerate(boxes):
